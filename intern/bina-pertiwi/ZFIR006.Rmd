@@ -1,0 +1,602 @@
+---
+title: "Sevice Data Analyst"
+author: "Muhammad Hafizd Harkaputra"
+date: "2025-01-15"
+output: html_document
+---
+# Library
+```{r setup, include=FALSE}
+library(readxl)
+library(ggplot2)
+library(dplyr)
+library(grid)
+library(gridExtra)
+library(dtwclust)
+library(tidyr)
+library(lubridate)
+library(ggplot2)
+library(RColorBrewer)
+library(patchwork)
+```
+
+# Load Data
+```{r}
+data <- read_excel('/Users/hafizdharkaputra/Documents/BP/whoa.XLSX')
+```
+
+# Pre-processing
+## Column Choose
+```{r}
+data
+data <- data[c("Invoice","WO","WOT","Plant","WorkCenter","accTot","invDate","Customer")]
+```
+```{r}
+# Example with multiple columns
+categoric <- c("WO","Invoice","WOT","Plant","WorkCenter","Customer")
+data[categoric] <- lapply(data[categoric], factor)
+```
+
+## Subset
+### Filtering
+```{r}
+data <- data[!is.na(data$WOT), ]
+```
+
+### After Change
+```{r}
+filter_date1 <- as.POSIXct("2024-07-01", format = "%Y-%m-%d")
+data1 <- data[data$invDate >= filter_date1, ]
+```
+
+### Before Change
+```{r}
+filter_date2 <- as.POSIXct("2024-07-01", format = "%Y-%m-%d")
+data2 <- data[data$invDate < filter_date2, ]
+```
+
+# Exploratory Data Analysis (EDA)
+## Summary After
+```{r}
+summary(data1)
+```
+
+## Summary Before
+```{r}
+summary(data2)
+```
+
+## Work Order
+### Boxplot 
+
+```{r}
+#Title
+main_title <- textGrob("Distribution of Accounting Total by Work Order Type (Before and After Change)", gp = gpar(fontsize = 16, fontface = "bold"))
+
+
+# Boxplot for data1 (After Change)
+plot_data1 <- ggplot(data1, aes(x = WOT, y = accTot)) +
+  geom_boxplot(aes(fill = WOT)) +
+  theme_minimal() +
+  labs(
+    title = "After Change",
+    x = "Work Order Type",
+    y = "Accounting Total",
+    fill = "WOT Type"
+  )
+
+# Boxplot for data2 (Before Change)
+plot_data2 <- ggplot(data2, aes(x = WOT, y = accTot)) +
+  geom_boxplot(aes(fill = WOT)) +
+  theme_minimal() +
+  labs(
+    title = "Before Change",
+    x = "Work Order Type",
+    y = "Accounting Total",
+    fill = "WOT Type"
+  )
+
+# Arrange the two plots side by side
+grid.arrange(plot_data1, plot_data2, ncol = 2)
+
+```
+
+```{r}
+summary_stats <- data1 %>%
+  group_by(WOT) %>%
+  summarise(
+    Min = min(accTot, na.rm = TRUE),
+    Q1 = quantile(accTot, 0.25, na.rm = TRUE),
+    Median = median(accTot, na.rm = TRUE),
+    Q3 = quantile(accTot, 0.75, na.rm = TRUE),
+    Max = max(accTot, na.rm = TRUE),
+    Mean = mean(accTot, na.rm = TRUE),
+    SD = sd(accTot, na.rm = TRUE),
+    Count = n()
+  )
+
+# Visualize accTot distribution for each WOT using a boxplot
+ggplot(data1, aes(x = WOT, y = accTot)) +
+  geom_boxplot(aes(fill = WOT)) +
+  theme_minimal() +
+  labs(
+    title = "Distribution After Change",
+    x = "Work Order Type",
+    y = "Accounting Total",
+    fill = "WOT Type"
+  )
+
+summary_stats <- data2 %>%
+  group_by(WOT) %>%
+  summarise(
+    Min = min(accTot, na.rm = TRUE),
+    Q1 = quantile(accTot, 0.25, na.rm = TRUE),
+    Median = median(accTot, na.rm = TRUE),
+    Q3 = quantile(accTot, 0.75, na.rm = TRUE),
+    Max = max(accTot, na.rm = TRUE),
+    Mean = mean(accTot, na.rm = TRUE),
+    SD = sd(accTot, na.rm = TRUE),
+    Count = n()
+  )
+
+# Visualize accTot distribution for each WOT using a boxplot
+ggplot(data2, aes(x = WOT, y = accTot)) +
+  geom_boxplot(aes(fill = WOT)) +
+  theme_minimal() +
+  labs(
+    title = "Distribution After Change",
+    x = "Work Order Type",
+    y = "Accounting Total",
+    fill = "WOT Type"
+  )
+```
+
+### Boxplot Zoom
+```{r}
+# Calculate the limits for the y-axis based on the data
+y_limits <- data1 %>%
+  group_by(WOT) %>%
+  summarise(
+    Min = min(accTot, na.rm = TRUE),
+    Q1 = quantile(accTot, 0.25, na.rm = TRUE),
+    Q3 = quantile(accTot, 0.75, na.rm = TRUE),
+    Max = max(accTot, na.rm = TRUE)
+  )
+
+# Set the y-axis limits to zoom in on the IQR and whiskers
+ggplot(data1, aes(x = WOT, y = accTot)) +
+  geom_boxplot(aes(fill = WOT)) +
+  coord_cartesian(ylim = c(0, max(y_limits$Q3 + 1.5 * IQR(y_limits$Q3 - y_limits$Q1)))) +
+  theme_minimal() +
+  labs(
+    title = "Zoomed Distribution After Change",
+    x = "Work Order Type",
+    y = "Accounting Total",
+    fill = "Work Order Type"
+  )
+
+# Calculate the limits for the y-axis based on the data
+y_limits <- data2 %>%
+  group_by(WOT) %>%
+  summarise(
+    Min = min(accTot, na.rm = TRUE),
+    Q1 = quantile(accTot, 0.25, na.rm = TRUE),
+    Q3 = quantile(accTot, 0.75, na.rm = TRUE),
+    Max = max(accTot, na.rm = TRUE)
+  )
+
+# Set the y-axis limits to zoom in on the IQR and whiskers
+ggplot(data2, aes(x = WOT, y = accTot)) +
+  geom_boxplot(aes(fill = WOT)) +
+  coord_cartesian(ylim = c(0, max(y_limits$Q3 + 1.5 * IQR(y_limits$Q3 - y_limits$Q1)))) +
+  theme_minimal() +
+  labs(
+    title = "Zoomed Distribution Before Change",
+    x = "Work Order Type",
+    y = "Accounting Total",
+    fill = "Work Order Type"
+  )
+
+```
+
+### Histogram
+```{r}
+# Individual histograms for each WOT using facet_wrap
+ggplot(data1, aes(x = accTot)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black", alpha = 0.7) +
+  facet_wrap(~WOT, scales = "free") +
+  theme_minimal() +
+  labs(
+    title = "Histograms After Change",
+    x = "Accounting Total",
+    y = "Count"
+  )
+
+# Individual histograms for each WOT using facet_wrap
+ggplot(data2, aes(x = accTot)) +
+  geom_histogram(bins = 30, fill = "skyblue", color = "black", alpha = 0.7) +
+  facet_wrap(~WOT, scales = "free") +
+  theme_minimal() +
+  labs(
+    title = "Histograms Before Change",
+    x = "Accounting Total",
+    y = "Count"
+  )
+```
+
+### Pie Chart
+#### 2024
+```{r}
+# Convert invDate to Date type if not already done
+data$invDate <- as.Date(data$invDate)
+
+# Filter data for the year 2024
+data_2024 <- subset(data, format(invDate, "%Y") == "2024")
+
+# Aggregate accTot by WOT
+agg_data <- aggregate(accTot ~ WOT, data = data_2024, sum)
+```
+
+### After Change
+```{r}
+data1 <- data_2024[data_2024$invDate >= filter_date1, ]
+```
+
+### Before Change
+```{r}
+data2 <- data_2024[data_2024$invDate < filter_date2, ]
+```
+
+```{r}
+# Define a different color palette (Set3)
+set3_colors <- brewer.pal(n = 12, name = "Set3")
+
+# Prepare data1 for the first chart - count occurrences of WOT
+agg_data1 <- data1 %>%
+  count(WOT) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  mutate(legend_label = paste0(WOT, " (", n, " counts, ", round(percentage, 2), "%)"))
+
+# Prepare data2 for the second chart - count occurrences of WOT
+agg_data2 <- data2 %>%
+  count(WOT) %>%
+  mutate(percentage = n / sum(n) * 100) %>%
+  mutate(legend_label = paste0(WOT, " (", n, " counts, ", round(percentage, 2), "%)"))
+
+# Ensure consistent legend across both datasets
+combined_levels <- union(agg_data1$legend_label, agg_data2$legend_label)
+agg_data1$legend_label <- factor(agg_data1$legend_label, levels = combined_levels)
+agg_data2$legend_label <- factor(agg_data2$legend_label, levels = combined_levels)
+
+# Create the first pie chart
+plot1 <- ggplot(agg_data1, aes(x = "", y = n, fill = legend_label)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  scale_fill_manual(values = set3_colors) +
+  labs(title = "Count Work Order Type", fill = "WOT") +
+  theme_void()
+
+# Create the second pie chart
+plot2 <- ggplot(agg_data2, aes(x = "", y = n, fill = legend_label)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y", start = 0) +
+  scale_fill_manual(values = set3_colors) +
+  labs(title = "Count Work Order Type", fill = "WOT") +
+  theme_void()
+
+# Output the first plot
+print(plot1)
+
+# Output the second plot
+print(plot2)
+
+```
+
+
+## Plant
+```{r}
+summary_stats <- data1 %>%
+  group_by(Plant) %>%
+  summarise(
+    Min = min(accTot, na.rm = TRUE),
+    Q1 = quantile(accTot, 0.25, na.rm = TRUE),
+    Median = median(accTot, na.rm = TRUE),
+    Q3 = quantile(accTot, 0.75, na.rm = TRUE),
+    Max = max(accTot, na.rm = TRUE),
+    Mean = mean(accTot, na.rm = TRUE),
+    SD = sd(accTot, na.rm = TRUE),
+    Count = n()
+  )
+
+# Visualize accTot distribution for each WOT using a boxplot
+ggplot(data1, aes(x = Plant, y = accTot)) +
+  geom_boxplot(aes(fill = Plant)) +
+  theme_minimal() +
+  labs(
+    title = "Distribution After Change",
+    x = "Plant Type",
+    y = "Accounting Total",
+    fill = "Plant Type"
+  )
+
+summary_stats <- data2 %>%
+  group_by(Plant) %>%
+  summarise(
+    Min = min(accTot, na.rm = TRUE),
+    Q1 = quantile(accTot, 0.25, na.rm = TRUE),
+    Median = median(accTot, na.rm = TRUE),
+    Q3 = quantile(accTot, 0.75, na.rm = TRUE),
+    Max = max(accTot, na.rm = TRUE),
+    Mean = mean(accTot, na.rm = TRUE),
+    SD = sd(accTot, na.rm = TRUE),
+    Count = n()
+  )
+
+# Visualize accTot distribution for each WOT using a boxplot
+ggplot(data2, aes(x = Plant, y = accTot)) +
+  geom_boxplot(aes(fill = Plant)) +
+  theme_minimal() +
+  labs(
+    title = "Distribution After Change",
+    x = "Plant Type",
+    y = "Accounting Total",
+    fill = "Plant Type"
+  )
+```
+
+
+
+```{r}
+# Calculate the limits for the y-axis based on the data
+y_limits <- data1 %>%
+  group_by(Plant) %>%
+  summarise(
+    Min = min(accTot, na.rm = TRUE),
+    Q1 = quantile(accTot, 0.25, na.rm = TRUE),
+    Q3 = quantile(accTot, 0.75, na.rm = TRUE),
+    Max = max(accTot, na.rm = TRUE)
+  )
+
+# Set the y-axis limits to zoom in on the IQR and whiskers
+ggplot(data1, aes(x = Plant, y = accTot)) +
+  geom_boxplot(aes(fill = Plant)) +
+  coord_cartesian(ylim = c(0, max(y_limits$Q3 + 1.5 * IQR(y_limits$Q3 - y_limits$Q1)))) +
+  theme_minimal() +
+  labs(
+    title = "Zoomed Distribution After Change",
+    x = "Plant",
+    y = "Accounting Total",
+    fill = "Plant Type"
+  )
+
+# Calculate the limits for the y-axis based on the data
+y_limits <- data2 %>%
+  group_by(Plant) %>%
+  summarise(
+    Min = min(accTot, na.rm = TRUE),
+    Q1 = quantile(accTot, 0.25, na.rm = TRUE),
+    Q3 = quantile(accTot, 0.75, na.rm = TRUE),
+    Max = max(accTot, na.rm = TRUE)
+  )
+
+# Set the y-axis limits to zoom in on the IQR and whiskers
+ggplot(data2, aes(x = Plant, y = accTot)) +
+  geom_boxplot(aes(fill = Plant)) +
+  coord_cartesian(ylim = c(0, max(y_limits$Q3 + 1.5 * IQR(y_limits$Q3 - y_limits$Q1)))) +
+  theme_minimal() +
+  labs(
+    title = "Zoomed Distribution Before Change",
+    x = "Plant",
+    y = "Accounting Total",
+    fill = "Plant Type"
+  )
+
+```
+
+
+
+# Clustering
+## Group by Month
+```{r}
+# Step 1: Prepare the data
+data$invDate <- as.Date(data$invDate)
+
+# Aggregate by Month and Customer
+monthly_data <- data %>%
+  mutate(Month = floor_date(invDate, "month")) %>%
+  group_by(Customer, Month) %>%
+  summarise(TotalAccTot = sum(accTot, na.rm = TRUE), .groups = "drop")
+
+# Convert to wide format where each customer is a column and each row is a month
+ts_data <- monthly_data %>%
+  pivot_wider(names_from = Customer, values_from = TotalAccTot, values_fill = list(TotalAccTot = 0))
+```
+
+## Filtering
+```{r}
+# Filter customers based on zero counts in a row (less than 15 zeroes)
+zero_counts <- colSums(ts_data == 0)
+filtered_ts_data <- ts_data[, zero_counts < 20]
+
+# Check filtered data
+head(filtered_ts_data)
+```
+
+## Scaled
+```{r}
+# Remove the 'Month' column before scaling
+filtered_ts_data <- filtered_ts_data %>% select(-Month)
+
+# Scale the data (normalize)
+filtered_ts_data_scaled <- scale(filtered_ts_data)
+
+# Check the scaled data
+head(filtered_ts_data_scaled)
+
+```
+## Modelling
+```{r}
+# Transpose the data: Customers as rows, Months as columns
+transposed_data <- t(filtered_ts_data_scaled)
+
+# Perform the clustering (adjust the number of clusters as needed)
+set.seed(123)  # For reproducibility
+k_value <- 4  # Adjust the number of clusters
+
+clustering_result <- tsclust(
+  transposed_data, 
+  type = "partitional", 
+  k = k_value, 
+  distance = "dtw_basic", 
+  centroid = "pam"
+)
+
+# Check the number of clusters
+cat("Number of clusters:", length(clustering_result@cluster), "\n")
+```
+
+## Labelling
+```{r}
+# Assign clusters to customers (columns)
+cluster_labels <- data.frame(
+  Customer = colnames(filtered_ts_data),  # Customers are columns in the original data
+  Cluster = clustering_result@cluster
+)
+
+# View cluster assignments
+print(cluster_labels)
+```
+## Transpose
+```{r}
+# Add the cluster labels to the filtered time series data
+cluster_labels <- data.frame(
+  Customer = colnames(filtered_ts_data),  # Customers are columns
+  Cluster = clustering_result@cluster
+)
+
+# Transpose the data back to long format for plotting
+long_ts_data <- filtered_ts_data %>%
+  pivot_longer(cols = everything(), 
+               names_to = "Customer", 
+               values_to = "TotalAccTot") %>%
+  left_join(cluster_labels, by = "Customer")
+
+# Check the long-format data
+head(long_ts_data)
+
+```
+
+## Plot
+```{r}
+# Create a plot for each cluster
+ggplot(long_ts_data, aes(x = rep(1:nrow(filtered_ts_data), ncol(filtered_ts_data)), y = TotalAccTot, group = interaction(Customer, Cluster), color = as.factor(Cluster))) +
+  geom_line() +
+  facet_wrap(~ Cluster, scales = "free_y") +  # Create separate plots for each cluster
+  labs(title = "Time Series for Each Cluster",
+       x = "Months",
+       y = "TotalAccTot (Scaled)",
+       color = "Cluster") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+```
+
+## Elbow Method
+```{r}
+install.packages("factoextra")
+library(factoextra)
+
+# Compute K-means clustering for a range of k values
+fviz_nbclust(filtered_ts_data_scaled, kmeans, method = "wss")
+
+```
+
+```{r}
+sil_scores <- sapply(2:10, function(k) {
+  clustering_result <- kmeans(filtered_ts_data_scaled, centers = k)
+  silhouette_result <- silhouette(clustering_result$cluster, dist(filtered_ts_data_scaled))
+  mean(silhouette_result[, 3])  # Accessing the third column, which contains the silhouette widths
+})
+
+```
+
+```{r}
+library(cluster)
+library(dtwclust)  # For DTW distance
+
+# Assuming 'filtered_ts_data_scaled' is your time series data
+# Convert to time series object if necessary
+ts_data <- ts(filtered_ts_data_scaled)
+
+# Create a distance matrix using DTW
+dist_matrix <- dist(ts_data, method = "DTW")
+
+# Perform k-medoids clustering
+k <- 3  # Choose the number of clusters
+clustering_result <- pam(dist_matrix, k)
+
+# Plot time series for each cluster
+par(mfrow = c(k, 1), mar = c(2, 4, 2, 1))  # Set up multi-plot layout
+
+for (i in 1:k) {
+  cluster_indices <- which(clustering_result$clustering == i)
+  cluster_data <- ts_data[cluster_indices, ]  # Extract time series in this cluster
+  
+  matplot(t(cluster_data), type = "l", col = 1:length(cluster_indices), 
+          main = paste("Cluster", i), xlab = "Time", ylab = "Value")
+  legend("topright", legend = paste("Series", cluster_indices), col = 1:length(cluster_indices), 
+         lty = 1, cex = 0.8)
+}
+
+# Optionally, plot the medoids
+for (i in 1:k) {
+  medoid_index <- clustering_result$medoids[i]
+  matlines(t(ts_data[medoid_index, ]), col = "red", lwd = 2)
+}
+
+```
+
+
+```{r}
+library(cluster)
+library(dtwclust)  # For DTW distance
+
+# Assuming 'filtered_ts_data_scaled' is your time series data
+# Get customer names from column names of the data
+customer_names <- colnames(filtered_ts_data_scaled)
+
+# Convert to time series object if necessary
+ts_data <- ts(filtered_ts_data_scaled)
+
+# Create a distance matrix using DTW
+dist_matrix <- dist(ts_data, method = "DTW")
+
+# Perform k-medoids clustering
+k <- 3  # Choose the number of clusters
+clustering_result <- pam(dist_matrix, k)
+
+# Plot time series for each cluster
+par(mfrow = c(k, 1), mar = c(2, 4, 2, 1))  # Set up multi-plot layout
+
+for (i in 1:k) {
+  cluster_indices <- which(clustering_result$clustering == i)
+  cluster_data <- ts_data[, cluster_indices]  # Extract time series in this cluster
+  
+  # Plot time series
+  matplot(t(cluster_data), type = "l", col = 1:length(cluster_indices), 
+          main = paste("Cluster", i), xlab = "Time", ylab = "Value")
+  
+  # Add legend with customer names
+  legend("topright", legend = customer_names[cluster_indices], col = 1:length(cluster_indices), 
+         lty = 1, cex = 0.8)
+}
+
+# Optionally, plot the medoids
+for (i in 1:k) {
+  medoid_index <- clustering_result$medoids[i]
+  matlines(t(ts_data[, medoid_index]), col = "red", lwd = 2)
+}
+
+
+```
+
+
